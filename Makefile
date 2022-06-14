@@ -20,11 +20,6 @@ SHELL = /usr/bin/env bash -o pipefail
 .PHONY: all
 all: build
 
-## Location to install dependencies to
-LOCALBIN ?= $(shell pwd)/bin
-$(LOCALBIN):
-	mkdir -p $(LOCALBIN)
-
 ##@ General
 
 # The help target prints out all targets with their descriptions organized
@@ -82,19 +77,12 @@ docker-build: test ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
-GOLANGCILINT ?= $(LOCALBIN)/golangci-lint
-
-golangci-lint: $(GOLANGCILINT)
-$(GOLANGCILINT): $(LOCALBIN)
-	## TODO this would not work in non darwin machine
-	GOBIN=$(LOCALBIN) brew install golangci-lint
-
 .PHONY: lint
-lint: golangci-lint ## Runs a linter against the repository.
+lint: ## Runs a linter against the repository.
 	golangci-lint run
 
 .PHONY: lint-fix
-lint-fix: golangci-lint ## Runs a linter against the repository and tries to automatically fix all the errors.
+lint-fix: ## Runs a linter against the repository and tries to automatically fix all the errors.
 	golangci-lint run --fix
 
 ##@ Deployment
@@ -121,6 +109,11 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 ##@ Build Dependencies
+
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
 
 ## Tool Binaries
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
