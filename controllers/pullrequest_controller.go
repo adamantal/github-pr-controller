@@ -24,7 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	githubv1 "colossyan.com/github-pr-controller/api/v1"
+	githubalphav1 "colossyan.com/github-pr-controller/api/alphav1"
 )
 
 // PullRequestReconciler reconciles a PullRequest object
@@ -57,6 +57,6 @@ func (r *PullRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager sets up the controller with the Manager.
 func (r *PullRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&githubv1.PullRequest{}).
+		For(&githubalphav1.PullRequest{}).
 		Complete(r)
 }

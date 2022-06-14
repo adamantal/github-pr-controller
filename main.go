@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	githubv1 "colossyan.com/github-pr-controller/api/v1"
+	githubalphav1 "colossyan.com/github-pr-controller/api/alphav1"
 	"colossyan.com/github-pr-controller/controllers"
 	//+kubebuilder:scaffold:imports
 )
@@ -44,7 +44,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(githubv1.AddToScheme(scheme))
+	utilruntime.Must(githubalphav1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

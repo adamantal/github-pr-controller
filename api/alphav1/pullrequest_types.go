@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package alphav1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,14 +28,32 @@ type PullRequestSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of PullRequest. Edit pullrequest_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// SourceBranch is the source branch of the pull request
+	SourceBranch string `json:"sourceBranch"`
+
+	// TargetBranch is the target branch of the pull request
+	TargetBranch string `json:"targetBranch"`
 }
+
+// PullRequestState describes the current state of the GitHub pull request.
+// +kubebuilder:validation:Enum=Open;Closed
+type PullRequestState string
+
+const (
+	// Open means that the GitHub pull request is currently open.
+	Open PullRequestState = "Open"
+
+	// Closed represents a closed (either merged or unmerged) GitHub pull request state.
+	Closed PullRequestState = "Closed"
+)
 
 // PullRequestStatus defines the observed state of PullRequest
 type PullRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// The current state of the GitHub pull request.
+	State PullRequestState `json:"state"`
 }
 
 //+kubebuilder:object:root=true
