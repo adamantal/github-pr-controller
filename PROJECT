@@ -3,4 +3,14 @@ layout:
 - go.kubebuilder.io/v3
 projectName: github-pr-controller
 repo: colossyan.com/github-pr-controller
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: colossyan.com
+  group: github
+  kind: PullRequest
+  path: colossyan.com/github-pr-controller/api/v1
+  version: v1
 version: "3"
