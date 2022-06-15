@@ -1,0 +1,6 @@
+apiVersion: github.colossyan.com/v1alpha1
+kind: Repository
+metadata:
+  name: repository-sample
+spec:
+  # TODO(user): Add fields here

@@ -13,4 +13,13 @@ resources:
   kind: PullRequest
   path: colossyan.com/github-pr-controller/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: colossyan.com
+  group: github
+  kind: Repository
+  path: colossyan.com/github-pr-controller/api/v1alpha1
+  version: v1alpha1
 version: "3"
