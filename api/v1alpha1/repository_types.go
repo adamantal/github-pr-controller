@@ -34,6 +34,10 @@ type RepositorySpec struct {
 	// The name of the repository
 	Name string `json:"name"`
 
+	// The name of the Kubernetes secret containing the OAuth token required
+	// for the controller to access private repositories
+	SecretName string `json:"secretName,omitempty"`
+
 	// Whether the controller should sync all the pull requests belonging to the repository
 	SyncPullRequests bool `json:"syncPullRequests,omitempty"`
 }

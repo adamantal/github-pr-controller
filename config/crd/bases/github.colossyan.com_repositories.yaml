@@ -41,6 +41,10 @@ spec:
               owner:
                 description: The owner of the repository
                 type: string
+              secretName:
+                description: The name of the Kubernetes secret containing the OAuth
+                  token required for the controller to access private repositories
+                type: string
               syncPullRequests:
                 description: Whether the controller should sync all the pull requests
                   belonging to the repository

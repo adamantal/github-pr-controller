@@ -23,7 +23,9 @@ import (
 	"colossyan.com/github-pr-controller/pkg"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -53,9 +55,24 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	var secret *v1.Secret
+	if repository.Spec.SecretName != "" {
+		secret = &v1.Secret{}
+		if err := r.Client.Get(ctx, types.NamespacedName{
+			Name:      repository.Spec.SecretName,
+			Namespace: req.Namespace,
+		}, secret); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "could not find secret for repository")
+		}
+	}
+
 	logger.Info("syncing repository")
 	syncer := pkg.NewRepositorySyncer(logger)
-	if err := syncer.Run(ctx, repository); err != nil {
+	repRequest := pkg.RepositoryRequest{
+		Repository: repository,
+		Secret:     secret,
+	}
+	if err := syncer.Run(ctx, repRequest); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to sync repository")
 	}
 
