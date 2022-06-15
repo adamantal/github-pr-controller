@@ -21,6 +21,7 @@ import (
 
 	githubv1alpha1 "colossyan.com/github-pr-controller/api/v1alpha1"
 	"colossyan.com/github-pr-controller/pkg"
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -45,7 +46,6 @@ type RepositoryReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger = logger.WithValues("crName", req.Name)
 
 	logger.Info("getting repository from request")
 	repository := githubv1alpha1.Repository{}
@@ -59,11 +59,11 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, errors.Wrap(err, "failed to sync repository")
 	}
 
-	logger.Info("updating status")
+	logger.Info("checking status")
 	newStatus := githubv1alpha1.RepositoryStatus{
 		Accessed: true,
 	}
-	if err := r.updateStatus(ctx, repository, newStatus); err != nil {
+	if err := r.updateStatus(ctx, logger, repository, newStatus); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to update status")
 	}
 
@@ -79,6 +79,7 @@ func (r *RepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *RepositoryReconciler) updateStatus(
 	ctx context.Context,
+	logger logr.Logger,
 	repository githubv1alpha1.Repository,
 	newStatus githubv1alpha1.RepositoryStatus,
 ) error {
@@ -89,7 +90,8 @@ func (r *RepositoryReconciler) updateStatus(
 	updatedRepository := repository.DeepCopy()
 	updatedRepository.Status = newStatus
 
-	if err := r.Client.Update(ctx, updatedRepository); err != nil {
+	logger.Info("updating status", "newStatus", newStatus)
+	if err := r.Client.Status().Update(ctx, updatedRepository); err != nil {
 		return errors.Wrap(err, "failed to update Repository resource")
 	}
 

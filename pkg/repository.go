@@ -34,7 +34,7 @@ func (rs *RepositorySyncer) Run(ctx context.Context, repository githubv1alpha1.R
 }
 
 func (rs *RepositorySyncer) checkAccess(ctx context.Context, repository githubv1alpha1.Repository) error {
-	if !repository.Status.Accessed {
+	if repository.Status.Accessed {
 		return nil
 	}
 
