@@ -1,4 +1,4 @@
-apiVersion: github.colossyan.com/v1
+apiVersion: github.colossyan.com/v1alpha1
 kind: PullRequest
 metadata:
   name: pullrequest-sample

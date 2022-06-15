@@ -15,7 +15,7 @@ spec:
     singular: pullrequest
   scope: Namespaced
   versions:
-  - name: alphav1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
         description: PullRequest is the Schema for the pullrequests API
