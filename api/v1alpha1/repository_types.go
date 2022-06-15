@@ -28,14 +28,23 @@ type RepositorySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Repository. Edit repository_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Name is the name of the repository
+	Name string `json:"name"`
+
+	// Whether the controller should sync all the pull requests belonging to the repository
+	SyncPullRequests bool `json:"syncPullRequests,omitempty"`
 }
 
 // RepositoryStatus defines the observed state of Repository
 type RepositoryStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Whether the Repository has been synced
+	Synced bool `json:"synced"`
+
+	// Any error during the synchronization.
+	Error string `json:"error,omitempty"`
 }
 
 //+kubebuilder:object:root=true

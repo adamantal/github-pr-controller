@@ -31,3 +31,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - github.colossyan.com
+  resources:
+  - repositories
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - github.colossyan.com
+  resources:
+  - repositories/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - github.colossyan.com
+  resources:
+  - repositories/status
+  verbs:
+  - get
+  - patch
+  - update
