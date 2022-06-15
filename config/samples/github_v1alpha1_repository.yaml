@@ -3,4 +3,5 @@ kind: Repository
 metadata:
   name: repository-sample
 spec:
-  # TODO(user): Add fields here
+  owner: adamantal
+  name: github-pr-controller

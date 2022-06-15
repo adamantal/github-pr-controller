@@ -28,7 +28,10 @@ type RepositorySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Name is the name of the repository
+	// The owner of the repository
+	Owner string `json:"owner"`
+
+	// The name of the repository
 	Name string `json:"name"`
 
 	// Whether the controller should sync all the pull requests belonging to the repository
@@ -40,11 +43,8 @@ type RepositoryStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Whether the Repository has been synced
-	Synced bool `json:"synced"`
-
-	// Any error during the synchronization.
-	Error string `json:"error,omitempty"`
+	// Whether the Repository has been accessed and the controller has the authorization to get details.
+	Accessed bool `json:"accessed"`
 }
 
 //+kubebuilder:object:root=true
@@ -68,6 +68,6 @@ type RepositoryList struct {
 	Items           []Repository `json:"items"`
 }
 
-func init() {
+func init() { // nolint:gochecknoinits
 	SchemeBuilder.Register(&Repository{}, &RepositoryList{})
 }

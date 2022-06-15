@@ -77,6 +77,6 @@ type PullRequestList struct {
 	Items           []PullRequest `json:"items"`
 }
 
-func init() {
+func init() { // nolint:gochecknoinits
 	SchemeBuilder.Register(&PullRequest{}, &PullRequestList{})
 }

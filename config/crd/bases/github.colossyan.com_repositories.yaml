@@ -36,7 +36,10 @@ spec:
             description: RepositorySpec defines the desired state of Repository
             properties:
               name:
-                description: Name is the name of the repository
+                description: The name of the repository
+                type: string
+              owner:
+                description: The owner of the repository
                 type: string
               syncPullRequests:
                 description: Whether the controller should sync all the pull requests
@@ -44,18 +47,17 @@ spec:
                 type: boolean
             required:
             - name
+            - owner
             type: object
           status:
             description: RepositoryStatus defines the observed state of Repository
             properties:
-              error:
-                description: Any error during the synchronization.
-                type: string
-              synced:
-                description: Whether the Repository has been synced
+              accessed:
+                description: Whether the Repository has been accessed and the controller
+                  has the authorization to get details.
                 type: boolean
             required:
-            - synced
+            - accessed
             type: object
         type: object
     served: true

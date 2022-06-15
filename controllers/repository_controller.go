@@ -19,12 +19,13 @@ package controllers
 import (
 	"context"
 
+	githubv1alpha1 "colossyan.com/github-pr-controller/api/v1alpha1"
+	"colossyan.com/github-pr-controller/pkg"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	githubv1alpha1 "colossyan.com/github-pr-controller/api/v1alpha1"
 )
 
 // RepositoryReconciler reconciles a Repository object
@@ -39,17 +40,32 @@ type RepositoryReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Repository object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.2/pkg/reconcile
 func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
+	logger = logger.WithValues("crName", req.Name)
 
-	// TODO(user): your logic here
+	logger.Info("getting repository from request")
+	repository := githubv1alpha1.Repository{}
+	if err := r.Client.Get(ctx, req.NamespacedName, &repository); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	logger.Info("syncing repository")
+	syncer := pkg.NewRepositorySyncer(logger)
+	if err := syncer.Run(ctx, repository); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to sync repository")
+	}
+
+	logger.Info("updating status")
+	newStatus := githubv1alpha1.RepositoryStatus{
+		Accessed: true,
+	}
+	if err := r.updateStatus(ctx, repository, newStatus); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to update status")
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -59,4 +75,23 @@ func (r *RepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&githubv1alpha1.Repository{}).
 		Complete(r)
+}
+
+func (r *RepositoryReconciler) updateStatus(
+	ctx context.Context,
+	repository githubv1alpha1.Repository,
+	newStatus githubv1alpha1.RepositoryStatus,
+) error {
+	if repository.Status == newStatus {
+		return nil
+	}
+
+	updatedRepository := repository.DeepCopy()
+	updatedRepository.Status = newStatus
+
+	if err := r.Client.Update(ctx, updatedRepository); err != nil {
+		return errors.Wrap(err, "failed to update Repository resource")
+	}
+
+	return nil
 }
