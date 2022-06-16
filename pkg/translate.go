@@ -34,6 +34,8 @@ func PullRequestToCr(
 			},
 			BaseRef: *pullRequest.Base.Ref,
 			HeadRef: *pullRequest.Head.Ref,
+			ID:      *pullRequest.ID,
+			Number:  *pullRequest.Number,
 		},
 		Status: v1alpha1.PullRequestStatus{
 			State:     v1alpha1.PullRequestState(cases.Title(language.Und).String(*pullRequest.State)),

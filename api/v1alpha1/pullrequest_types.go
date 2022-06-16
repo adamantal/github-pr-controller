@@ -36,6 +36,12 @@ type PullRequestSpec struct {
 
 	// The git ref to the base of the pull request
 	BaseRef string `json:"baseRef"`
+
+	// The ID of the pull request
+	ID int64 `json:"id"`
+
+	// The number of the pull request
+	Number int `json:"number"`
 }
 
 type RepositoryDetail struct {

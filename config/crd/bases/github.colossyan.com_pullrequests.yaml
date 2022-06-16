@@ -41,6 +41,13 @@ spec:
               headRef:
                 description: The git ref to the head of the pull request
                 type: string
+              id:
+                description: The ID of the pull request
+                format: int64
+                type: integer
+              number:
+                description: The number of the pull request
+                type: integer
               repository:
                 description: The details of the repository this pull request belongs
                   to
@@ -58,6 +65,8 @@ spec:
             required:
             - baseRef
             - headRef
+            - id
+            - number
             - repository
             type: object
           status:
