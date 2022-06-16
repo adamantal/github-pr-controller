@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"colossyan.com/github-pr-controller/api/v1alpha1"
-	"github.com/google/go-github/github"
+	"github.com/google/go-github/v45/github"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +15,11 @@ const (
 	nameFmt = "%s-%s"
 )
 
-func PullRequestToCr(pullRequest *github.PullRequest, namespace string) v1alpha1.PullRequest {
+func PullRequestToCr(
+	pullRequest *github.PullRequest,
+	namespace string,
+	workflowRuns []*github.WorkflowRun,
+) v1alpha1.PullRequest {
 	return v1alpha1.PullRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getName(pullRequest),
@@ -26,8 +30,9 @@ func PullRequestToCr(pullRequest *github.PullRequest, namespace string) v1alpha1
 			HeadRef: *pullRequest.Head.Ref,
 		},
 		Status: v1alpha1.PullRequestStatus{
-			State:  v1alpha1.PullRequestState(cases.Title(language.Und).String(*pullRequest.State)),
-			Labels: getLabels(pullRequest),
+			State:     v1alpha1.PullRequestState(cases.Title(language.Und).String(*pullRequest.State)),
+			Labels:    getLabels(pullRequest),
+			Workflows: getWorkflowRuns(*pullRequest.ID, workflowRuns),
 		},
 	}
 }
@@ -53,4 +58,20 @@ func getLabels(pullRequest *github.PullRequest) []string {
 		labels = append(labels, *label.Name)
 	}
 	return labels
+}
+
+func getWorkflowRuns(prID int64, workflowRuns []*github.WorkflowRun) []v1alpha1.WorkflowRunStatus {
+	var statuses []v1alpha1.WorkflowRunStatus
+	for _, workflowRun := range workflowRuns {
+		for _, pr := range workflowRun.PullRequests {
+			if *pr.ID == prID {
+				statuses = append(statuses, v1alpha1.WorkflowRunStatus{
+					Status:     *workflowRun.Status,
+					Conclusion: *workflowRun.Conclusion,
+				})
+				break
+			}
+		}
+	}
+	return statuses
 }

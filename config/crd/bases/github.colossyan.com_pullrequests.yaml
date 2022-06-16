@@ -59,6 +59,22 @@ spec:
                 - Open
                 - Closed
                 type: string
+              workflowFinished:
+                description: Whether there is a workflow in progress at the head of
+                  the pull request
+                items:
+                  properties:
+                    conclusion:
+                      description: The conclusion of the run
+                      type: string
+                    status:
+                      description: The status of the run
+                      type: string
+                  required:
+                  - conclusion
+                  - status
+                  type: object
+                type: array
             required:
             - state
             type: object

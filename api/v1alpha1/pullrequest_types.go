@@ -47,6 +47,14 @@ const (
 	Closed PullRequestState = "Closed"
 )
 
+type WorkflowRunStatus struct {
+	// The status of the run
+	Status string `json:"status"`
+
+	// The conclusion of the run
+	Conclusion string `json:"conclusion"`
+}
+
 // PullRequestStatus defines the observed state of PullRequest
 type PullRequestStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
@@ -57,6 +65,9 @@ type PullRequestStatus struct {
 
 	// The labels of the pull request
 	Labels []string `json:"labels,omitempty"`
+
+	// Whether there is a workflow in progress at the head of the pull request
+	Workflows []WorkflowRunStatus `json:"workflowFinished,omitempty"`
 }
 
 func (s *PullRequestStatus) IsEqual(other *PullRequestStatus) bool {
@@ -64,7 +75,11 @@ func (s *PullRequestStatus) IsEqual(other *PullRequestStatus) bool {
 		return false
 	}
 
-	if !areSlicesEqual(s.Labels, other.Labels) {
+	if !areStringSlicesEqual(s.Labels, other.Labels) {
+		return false
+	}
+
+	if !areWorkflowRunStatusSlicesEqual(s.Workflows, other.Workflows) {
 		return false
 	}
 

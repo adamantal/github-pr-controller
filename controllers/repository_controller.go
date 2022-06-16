@@ -164,7 +164,8 @@ func (r *RepositoryReconciler) reconcilePullRequests(ctx context.Context, output
 
 	pullRequestCrs := make([]v1alpha1.PullRequest, 0, len(output.PullRequests))
 	for _, pr := range output.PullRequests {
-		pullRequestCrs = append(pullRequestCrs, pkg.PullRequestToCr(pr, output.Input.Repository.GetNamespace()))
+		pullRequestCrs = append(pullRequestCrs,
+			pkg.PullRequestToCr(pr, output.Input.Repository.GetNamespace(), output.WorkflowRuns))
 	}
 
 	for _, pullRequestCr := range pullRequestCrs {

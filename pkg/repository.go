@@ -3,17 +3,20 @@ package pkg
 import (
 	"context"
 	"net/http"
+	"time"
 
 	githubv1alpha1 "colossyan.com/github-pr-controller/api/v1alpha1"
 	"github.com/go-logr/logr"
-	"github.com/google/go-github/github"
+	"github.com/google/go-github/v45/github"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 	v1 "k8s.io/api/core/v1"
 )
 
 const (
-	tokenName = "token"
+	tokenName                   = "token"
+	pullRequestWorkflowFileName = "pull-request.yml"
+	maxPages                    = 20 // let's not rate-limit ourselves
 )
 
 type RepositorySyncer struct {
@@ -29,6 +32,7 @@ type RepositorySyncInput struct {
 type RepositorySyncOutput struct {
 	Input        *RepositorySyncInput
 	PullRequests []*github.PullRequest
+	WorkflowRuns []*github.WorkflowRun
 }
 
 func NewRepositorySyncer(logger logr.Logger) RepositorySyncer {
@@ -42,7 +46,7 @@ func (rs *RepositorySyncer) Run(ctx context.Context, req RepositorySyncInput) (*
 		return nil, errors.Wrap(err, "failed to check access of repository")
 	}
 
-	prs, err := rs.sync(ctx, req)
+	prs, workflowRuns, err := rs.sync(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to synchronize repository")
 	}
@@ -50,6 +54,7 @@ func (rs *RepositorySyncer) Run(ctx context.Context, req RepositorySyncInput) (*
 	return &RepositorySyncOutput{
 		Input:        &req,
 		PullRequests: prs,
+		WorkflowRuns: workflowRuns,
 	}, nil
 }
 
@@ -79,21 +84,49 @@ func (rs *RepositorySyncer) getGithubClient(ctx context.Context, secret *v1.Secr
 	return rs.client
 }
 
-func (rs *RepositorySyncer) sync(ctx context.Context, req RepositorySyncInput) ([]*github.PullRequest, error) {
+func (rs *RepositorySyncer) sync(
+	ctx context.Context,
+	req RepositorySyncInput,
+) ([]*github.PullRequest, []*github.WorkflowRun, error) {
 	rs.logger.Info("syncing repository")
 
 	if !req.Repository.Spec.SyncPullRequests {
 		rs.logger.Info("skipping syncing repository")
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	client := rs.getGithubClient(ctx, req.Secret)
 	prs, _, err := client.PullRequests.List(ctx, req.Repository.Spec.Owner, req.Repository.Spec.Name, nil)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to list pull requests")
+		return nil, nil, errors.Wrap(err, "failed to list pull requests")
 	}
+	earliestTS := getEarliestPullRequestTS(prs)
 
-	return prs, nil
+	allRuns := []*github.WorkflowRun{}
+	page := 1
+	for ; page < maxPages; page++ {
+		opts := github.ListWorkflowRunsOptions{
+			Event: "pull_request",
+			ListOptions: github.ListOptions{
+				Page: page,
+			},
+		}
+
+		workflowRuns, _, err := client.Actions.ListWorkflowRunsByFileName(
+			ctx, req.Repository.Spec.Owner, req.Repository.Spec.Name, pullRequestWorkflowFileName, &opts)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to list workflows in repo")
+		}
+
+		allRuns = append(allRuns, workflowRuns.WorkflowRuns...)
+
+		if workflowRuns.WorkflowRuns[len(workflowRuns.WorkflowRuns)-1].CreatedAt.Before(earliestTS) {
+			break
+		}
+	}
+	rs.logger.V(1).Info("paginated workflow runs collected", "pages", page)
+
+	return prs, allRuns, nil
 }
 
 func createGithubClient(ctx context.Context, secret *v1.Secret) *github.Client {
@@ -107,4 +140,14 @@ func createGithubClient(ctx context.Context, secret *v1.Secret) *github.Client {
 	}
 
 	return github.NewClient(httpClient)
+}
+
+func getEarliestPullRequestTS(prs []*github.PullRequest) time.Time {
+	earliestTS := time.Now()
+	for _, pr := range prs {
+		if earliestTS.Before(*pr.CreatedAt) {
+			earliestTS = *pr.CreatedAt
+		}
+	}
+	return earliestTS
 }
