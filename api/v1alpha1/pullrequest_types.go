@@ -28,11 +28,11 @@ type PullRequestSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// SourceBranch is the source branch of the pull request
-	SourceBranch string `json:"sourceBranch"`
+	// The git ref to the head of the pull request
+	HeadRef string `json:"headRef"`
 
-	// TargetBranch is the target branch of the pull request
-	TargetBranch string `json:"targetBranch"`
+	// The git ref to the base of the pull request
+	BaseRef string `json:"baseRef"`
 }
 
 // PullRequestState describes the current state of the GitHub pull request.

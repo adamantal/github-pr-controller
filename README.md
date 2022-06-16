@@ -7,6 +7,7 @@ The created resources can be  further used by downstream controllers or applicat
 
 - admission webhook to forbid changes of repository and pull requests fields
 - set up github workflows
-- implement repository sync
 - implement pullrequest sync
 - create deployable helm chart
+- trigger reconcile of repository when pullrequest cr change
+- handle closing pull request

@@ -18,12 +18,15 @@ package controllers
 
 import (
 	"context"
+	"time"
 
-	githubv1alpha1 "colossyan.com/github-pr-controller/api/v1alpha1"
+	"colossyan.com/github-pr-controller/api/v1alpha1"
 	"colossyan.com/github-pr-controller/pkg"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,10 +34,38 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const (
+	reconcilePeriod = 1 * time.Minute
+)
+
 // RepositoryReconciler reconciles a Repository object
 type RepositoryReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme          *runtime.Scheme
+	reconcilePeriod time.Duration
+	Parameters      RepositoryReconcilerParameters
+}
+
+func NewRepositoryReconciler(
+	client client.Client,
+	scheme *runtime.Scheme,
+	params RepositoryReconcilerParameters,
+) (*RepositoryReconciler, error) {
+	reconcilePeriod, err := time.ParseDuration(params.ReconcilePeriod)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse duration for reconciler")
+	}
+
+	return &RepositoryReconciler{
+		Client:          client,
+		Scheme:          scheme,
+		reconcilePeriod: reconcilePeriod,
+	}, nil
+}
+
+type RepositoryReconcilerParameters struct {
+	ReconcilePeriod string `json:"reconcilePeriod"`
+	DefaultToken    string `json:"defaultToken"`
 }
 
 //+kubebuilder:rbac:groups=github.colossyan.com,resources=repositories,verbs=get;list;watch;create;update;patch;delete
@@ -50,16 +81,18 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	logger := log.FromContext(ctx)
 
 	logger.Info("getting repository from request")
-	repository := githubv1alpha1.Repository{}
+	repository := v1alpha1.Repository{}
 	if err := r.Client.Get(ctx, req.NamespacedName, &repository); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	var secret *v1.Secret
 	if repository.Spec.SecretName != "" {
+		secretName := repository.Spec.SecretName
+		logger.Info("obtaining secret", "secretName", secretName)
 		secret = &v1.Secret{}
 		if err := r.Client.Get(ctx, types.NamespacedName{
-			Name:      repository.Spec.SecretName,
+			Name:      secretName,
 			Namespace: req.Namespace,
 		}, secret); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "could not find secret for repository")
@@ -68,37 +101,46 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	logger.Info("syncing repository")
 	syncer := pkg.NewRepositorySyncer(logger)
-	repRequest := pkg.RepositoryRequest{
+	repRequest := pkg.RepositorySyncInput{
 		Repository: repository,
 		Secret:     secret,
 	}
-	if err := syncer.Run(ctx, repRequest); err != nil {
+	resp, err := syncer.Run(ctx, repRequest)
+	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to sync repository")
 	}
 
+	logger.Info("syncing pull requests")
+	if err := r.reconcilePullRequests(ctx, resp); err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to reconcile pull requests")
+	}
+
 	logger.Info("checking status")
-	newStatus := githubv1alpha1.RepositoryStatus{
+	newStatus := v1alpha1.RepositoryStatus{
 		Accessed: true,
 	}
 	if err := r.updateStatus(ctx, logger, repository, newStatus); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to update status")
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{
+		Requeue:      true,
+		RequeueAfter: reconcilePeriod,
+	}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *RepositoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&githubv1alpha1.Repository{}).
+		For(&v1alpha1.Repository{}).
 		Complete(r)
 }
 
 func (r *RepositoryReconciler) updateStatus(
 	ctx context.Context,
 	logger logr.Logger,
-	repository githubv1alpha1.Repository,
-	newStatus githubv1alpha1.RepositoryStatus,
+	repository v1alpha1.Repository,
+	newStatus v1alpha1.RepositoryStatus,
 ) error {
 	if repository.Status == newStatus {
 		return nil
@@ -113,4 +155,81 @@ func (r *RepositoryReconciler) updateStatus(
 	}
 
 	return nil
+}
+
+func (r *RepositoryReconciler) reconcilePullRequests(ctx context.Context, output *pkg.RepositorySyncOutput) error {
+	if len(output.PullRequests) == 0 {
+		return nil
+	}
+
+	pullRequestCrs := make([]v1alpha1.PullRequest, 0, len(output.PullRequests))
+	for _, pr := range output.PullRequests {
+		pullRequestCrs = append(pullRequestCrs, pkg.PullRequestToCr(pr, output.Input.Repository.GetNamespace()))
+	}
+
+	for _, pullRequestCr := range pullRequestCrs {
+		if err := r.reconcilePullRequest(ctx, output.Input.Repository, pullRequestCr); err != nil {
+			return errors.Wrap(err, "failed to reconcile pullrequest resource")
+		}
+	}
+
+	return nil
+}
+
+func (r *RepositoryReconciler) reconcilePullRequest(
+	ctx context.Context,
+	repository v1alpha1.Repository,
+	pullRequestCr v1alpha1.PullRequest,
+) error {
+	existingCr := v1alpha1.PullRequest{}
+	objKey := client.ObjectKeyFromObject(&pullRequestCr)
+	err := r.Client.Get(ctx, objKey, &existingCr)
+	foundOwnerRef := checkOwnerRef(repository, &existingCr)
+
+	switch {
+	case err == nil:
+		if existingCr.Spec != pullRequestCr.Spec || !foundOwnerRef {
+			existingCr.Spec = pullRequestCr.Spec
+			if err := r.Client.Update(ctx, &existingCr); err != nil {
+				return errors.Wrap(err, "failed to reconcile pullrequest resource")
+			}
+		}
+		if existingCr.Status != pullRequestCr.Status {
+			existingCr.Status = pullRequestCr.Status
+			if err := r.Client.Status().Update(ctx, &existingCr); err != nil {
+				return errors.Wrap(err, "failed to reconcile status subresource of pullrequest")
+			}
+		}
+		return nil
+
+	case apierrors.IsNotFound(err):
+		if err := r.Client.Create(ctx, &pullRequestCr); err != nil {
+			return errors.Wrap(err, "failed to create pullrequest resource")
+		}
+		return nil
+
+	default:
+		return errors.Wrap(err, "failed to check whether pullrequest exists")
+	}
+}
+
+func checkOwnerRef(repository v1alpha1.Repository, existingCr *v1alpha1.PullRequest) bool {
+	ownerRefs := existingCr.GetOwnerReferences()
+	foundOwnerRef := false
+	for _, ownerRef := range ownerRefs {
+		if repository.GetObjectKind().GroupVersionKind().Kind == ownerRef.Kind &&
+			repository.GetName() == ownerRef.Name {
+			foundOwnerRef = true
+		}
+	}
+	if !foundOwnerRef {
+		ownerRefs = append(ownerRefs, metav1.OwnerReference{
+			APIVersion: repository.APIVersion,
+			Kind:       repository.GetObjectKind().GroupVersionKind().Kind,
+			Name:       repository.GetName(),
+			UID:        repository.GetUID(),
+		})
+		existingCr.SetOwnerReferences(ownerRefs)
+	}
+	return foundOwnerRef
 }

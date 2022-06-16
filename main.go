@@ -22,6 +22,7 @@ import (
 
 	githubv1alpha1 "colossyan.com/github-pr-controller/api/v1alpha1"
 	"colossyan.com/github-pr-controller/controllers"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -60,6 +61,12 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
+	var repositoryParams controllers.RepositoryReconcilerParameters
+	flag.StringVar(&repositoryParams.ReconcilePeriod, "reconcile-period", "1m", "The period to reconcile the repository")
+	flag.StringVar(&repositoryParams.DefaultToken, "default-token", "",
+		"The default OAuth token to use as default secret when connecting to the Github server")
+
 	opts := k8s_zap.Options{
 		Development: true,
 		Encoder:     zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig()),
@@ -82,7 +89,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := addControllers(mgr); err != nil {
+	if err := addControllers(mgr, repositoryParams); err != nil {
 		os.Exit(1)
 	}
 
@@ -97,7 +104,7 @@ func main() {
 	}
 }
 
-func addControllers(mgr manager.Manager) error {
+func addControllers(mgr manager.Manager, repositoryParameters controllers.RepositoryReconcilerParameters) error {
 	if err := (&controllers.PullRequestReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -106,10 +113,12 @@ func addControllers(mgr manager.Manager) error {
 		return err
 	}
 
-	if err := (&controllers.RepositoryReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	repositoryReconciler, err := controllers.NewRepositoryReconciler(
+		mgr.GetClient(), mgr.GetScheme(), repositoryParameters)
+	if err != nil {
+		return errors.Wrap(err, "failed to create new repository reconciler")
+	}
+	if err := repositoryReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Repository")
 		return err
 	}

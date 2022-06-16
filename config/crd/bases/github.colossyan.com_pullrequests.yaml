@@ -35,15 +35,15 @@ spec:
           spec:
             description: PullRequestSpec defines the desired state of PullRequest
             properties:
-              sourceBranch:
-                description: SourceBranch is the source branch of the pull request
+              baseRef:
+                description: The git ref to the base of the pull request
                 type: string
-              targetBranch:
-                description: TargetBranch is the target branch of the pull request
+              headRef:
+                description: The git ref to the head of the pull request
                 type: string
             required:
-            - sourceBranch
-            - targetBranch
+            - baseRef
+            - headRef
             type: object
           status:
             description: PullRequestStatus defines the observed state of PullRequest
