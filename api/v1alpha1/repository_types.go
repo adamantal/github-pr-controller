@@ -23,6 +23,15 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// Rules to synchronize pull requests in the repository
+type SyncPullRequests struct {
+	// Whether the controller should synchronize the pull requests
+	Enabled bool `json:"enabled"`
+
+	// Ignores pull requests
+	IgnoreLabels []string `json:"ignoreLabels,omitempty"`
+}
+
 // RepositorySpec defines the desired state of Repository
 type RepositorySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -39,7 +48,7 @@ type RepositorySpec struct {
 	SecretName string `json:"secretName,omitempty"`
 
 	// Whether the controller should sync all the pull requests belonging to the repository
-	SyncPullRequests bool `json:"syncPullRequests,omitempty"`
+	SyncPullRequests SyncPullRequests `json:"syncPullRequests"`
 }
 
 // RepositoryStatus defines the observed state of Repository

@@ -5,3 +5,7 @@ metadata:
 spec:
   owner: adamantal
   name: github-pr-controller
+  syncPullRequests: 
+    enabled: true
+    ignoreLabels:
+    - dependencies

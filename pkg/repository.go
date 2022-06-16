@@ -17,6 +17,10 @@ const (
 	tokenName                   = "token"
 	pullRequestWorkflowFileName = "pull-request.yml"
 	maxPages                    = 20 // let's not rate-limit ourselves
+
+	day               = 24 * time.Hour
+	week              = 7 * day
+	maxLookBackWindow = 4 * week
 )
 
 type RepositorySyncer struct {
@@ -90,7 +94,7 @@ func (rs *RepositorySyncer) sync(
 ) ([]*github.PullRequest, []*github.WorkflowRun, error) {
 	rs.logger.Info("syncing repository")
 
-	if !req.Repository.Spec.SyncPullRequests {
+	if !req.Repository.Spec.SyncPullRequests.Enabled {
 		rs.logger.Info("skipping syncing repository")
 		return nil, nil, nil
 	}
@@ -100,7 +104,13 @@ func (rs *RepositorySyncer) sync(
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to list pull requests")
 	}
+	prs = ignorePrsByLabels(prs, req)
+
 	earliestTS := getEarliestPullRequestTS(prs)
+	if earliestTS.Before(time.Now().Add(-1 * maxLookBackWindow)) {
+		earliestTS = time.Now().Add(-1 * maxLookBackWindow)
+	}
+	rs.logger.V(1).Info("determined earliest timestamp", "ts", earliestTS)
 
 	allRuns := []*github.WorkflowRun{}
 	page := 1
@@ -145,9 +155,35 @@ func createGithubClient(ctx context.Context, secret *v1.Secret) *github.Client {
 func getEarliestPullRequestTS(prs []*github.PullRequest) time.Time {
 	earliestTS := time.Now()
 	for _, pr := range prs {
-		if earliestTS.Before(*pr.CreatedAt) {
+		if earliestTS.After(*pr.CreatedAt) {
 			earliestTS = *pr.CreatedAt
 		}
 	}
 	return earliestTS
+}
+
+func ignorePrsByLabels(prs []*github.PullRequest, req RepositorySyncInput) []*github.PullRequest {
+	if len(req.Repository.Spec.SyncPullRequests.IgnoreLabels) == 0 {
+		return prs
+	}
+
+	filtered := make([]*github.PullRequest, 0, len(prs))
+	for _, pr := range prs {
+		if !containsAny(pr.Labels, req.Repository.Spec.SyncPullRequests.IgnoreLabels) {
+			filtered = append(filtered, pr)
+		}
+	}
+
+	return filtered
+}
+
+func containsAny(labels []*github.Label, ignoreLabels []string) bool {
+	for _, ignoreLabel := range ignoreLabels {
+		for _, label := range labels {
+			if *label.Name == ignoreLabel {
+				return true
+			}
+		}
+	}
+	return false
 }
