@@ -52,7 +52,7 @@ type WorkflowRunStatus struct {
 	Status string `json:"status"`
 
 	// The conclusion of the run
-	Conclusion string `json:"conclusion"`
+	Conclusion string `json:"conclusion,omitempty"`
 }
 
 // PullRequestStatus defines the observed state of PullRequest
