@@ -48,6 +48,11 @@ spec:
           status:
             description: PullRequestStatus defines the observed state of PullRequest
             properties:
+              labels:
+                description: The labels of the pull request
+                items:
+                  type: string
+                type: array
               state:
                 description: The current state of the GitHub pull request.
                 enum:

@@ -26,7 +26,8 @@ func PullRequestToCr(pullRequest *github.PullRequest, namespace string) v1alpha1
 			HeadRef: *pullRequest.Head.Ref,
 		},
 		Status: v1alpha1.PullRequestStatus{
-			State: v1alpha1.PullRequestState(cases.Title(language.Und).String(*pullRequest.State)),
+			State:  v1alpha1.PullRequestState(cases.Title(language.Und).String(*pullRequest.State)),
+			Labels: getLabels(pullRequest),
 		},
 	}
 }
@@ -44,4 +45,12 @@ func blendString(str string) string {
 		str = strings.ReplaceAll(str, string(r), "-")
 	}
 	return str
+}
+
+func getLabels(pullRequest *github.PullRequest) []string {
+	labels := make([]string, 0, len(pullRequest.Labels))
+	for _, label := range pullRequest.Labels {
+		labels = append(labels, *label.Name)
+	}
+	return labels
 }

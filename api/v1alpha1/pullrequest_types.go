@@ -54,6 +54,21 @@ type PullRequestStatus struct {
 
 	// The current state of the GitHub pull request.
 	State PullRequestState `json:"state"`
+
+	// The labels of the pull request
+	Labels []string `json:"labels,omitempty"`
+}
+
+func (s *PullRequestStatus) IsEqual(other *PullRequestStatus) bool {
+	if s.State != other.State {
+		return false
+	}
+
+	if !areSlicesEqual(s.Labels, other.Labels) {
+		return false
+	}
+
+	return true
 }
 
 //+kubebuilder:object:root=true

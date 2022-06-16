@@ -194,7 +194,7 @@ func (r *RepositoryReconciler) reconcilePullRequest(
 				return errors.Wrap(err, "failed to reconcile pullrequest resource")
 			}
 		}
-		if existingCr.Status != pullRequestCr.Status {
+		if !existingCr.Status.IsEqual(&pullRequestCr.Status) {
 			existingCr.Status = pullRequestCr.Status
 			if err := r.Client.Status().Update(ctx, &existingCr); err != nil {
 				return errors.Wrap(err, "failed to reconcile status subresource of pullrequest")
