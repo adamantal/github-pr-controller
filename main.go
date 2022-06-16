@@ -20,8 +20,8 @@ import (
 	"flag"
 	"os"
 
-	githubv1alpha1 "colossyan.com/github-pr-controller/api/v1alpha1"
-	"colossyan.com/github-pr-controller/controllers"
+	githubv1alpha1 "github.com/adamantal/github-pr-controller/api/v1alpha1"
+	"github.com/adamantal/github-pr-controller/controllers"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

@@ -20,8 +20,8 @@ import (
 	"context"
 	"time"
 
-	"colossyan.com/github-pr-controller/api/v1alpha1"
-	"colossyan.com/github-pr-controller/pkg"
+	"github.com/adamantal/github-pr-controller/api/v1alpha1"
+	"github.com/adamantal/github-pr-controller/pkg"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"

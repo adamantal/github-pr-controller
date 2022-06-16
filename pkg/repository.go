@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	githubv1alpha1 "colossyan.com/github-pr-controller/api/v1alpha1"
+	githubv1alpha1 "github.com/adamantal/github-pr-controller/api/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/google/go-github/v45/github"
 	"github.com/pkg/errors"

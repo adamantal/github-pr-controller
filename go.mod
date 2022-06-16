@@ -1,4 +1,4 @@
-module colossyan.com/github-pr-controller
+module github.com/adamantal/github-pr-controller
 
 go 1.17
 

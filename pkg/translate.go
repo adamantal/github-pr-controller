@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"colossyan.com/github-pr-controller/api/v1alpha1"
+	"github.com/adamantal/github-pr-controller/api/v1alpha1"
 	"github.com/google/go-github/v45/github"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
