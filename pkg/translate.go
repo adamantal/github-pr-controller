@@ -17,15 +17,21 @@ const (
 
 func PullRequestToCr(
 	pullRequest *github.PullRequest,
-	namespace string,
-	workflowRuns []*github.WorkflowRun,
+	output *RepositorySyncOutput,
 ) v1alpha1.PullRequest {
+	namespace := output.Input.Repository.GetNamespace()
+	workflowRuns := output.WorkflowRuns
+
 	return v1alpha1.PullRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getName(pullRequest),
 			Namespace: namespace,
 		},
 		Spec: v1alpha1.PullRequestSpec{
+			Repository: v1alpha1.RepositoryDetail{
+				Name:  output.Input.Repository.Spec.Name,
+				Owner: output.Input.Repository.Spec.Owner,
+			},
 			BaseRef: *pullRequest.Base.Ref,
 			HeadRef: *pullRequest.Head.Ref,
 		},

@@ -28,11 +28,22 @@ type PullRequestSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// The details of the repository this pull request belongs to
+	Repository RepositoryDetail `json:"repository"`
+
 	// The git ref to the head of the pull request
 	HeadRef string `json:"headRef"`
 
 	// The git ref to the base of the pull request
 	BaseRef string `json:"baseRef"`
+}
+
+type RepositoryDetail struct {
+	// The owner of the repository
+	Owner string `json:"owner"`
+
+	// The name of the repository
+	Name string `json:"name"`
 }
 
 // PullRequestState describes the current state of the GitHub pull request.

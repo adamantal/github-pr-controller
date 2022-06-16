@@ -63,7 +63,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 
 	var repositoryParams controllers.RepositoryReconcilerParameters
-	flag.StringVar(&repositoryParams.ReconcilePeriod, "reconcile-period", "1m", "The period to reconcile the repository")
+	flag.StringVar(&repositoryParams.ReconcilePeriod, "reconcile-period", "30s", "The period to reconcile the repository")
 	flag.StringVar(&repositoryParams.DefaultToken, "default-token", "",
 		"The default OAuth token to use as default secret when connecting to the Github server")
 
