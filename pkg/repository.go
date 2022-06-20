@@ -25,7 +25,12 @@ const (
 
 type RepositorySyncer struct {
 	logger logr.Logger
-	client *github.Client // lazy initialized
+	client *github.Client         // lazy initialized
+	cache  *RepositorySyncerCache // cache
+}
+
+type RepositorySyncerCache struct {
+	workflows map[int64]*github.WorkflowRun
 }
 
 type RepositorySyncInput struct {
@@ -39,10 +44,38 @@ type RepositorySyncOutput struct {
 	WorkflowRuns []*github.WorkflowRun
 }
 
-func NewRepositorySyncer(logger logr.Logger) RepositorySyncer {
+func NewRepositorySyncer(logger logr.Logger, cache *RepositorySyncerCache) RepositorySyncer {
 	return RepositorySyncer{
 		logger: logger,
+		cache:  cache,
 	}
+}
+
+func NewRepositorySyncerCache() *RepositorySyncerCache {
+	return &RepositorySyncerCache{
+		workflows: make(map[int64]*github.WorkflowRun),
+	}
+}
+
+func (rsc *RepositorySyncerCache) SaveInCache(workflowRuns []*github.WorkflowRun) bool {
+	shouldBreak := false
+	for _, workflowRun := range workflowRuns {
+		_, ok := rsc.workflows[*workflowRun.ID]
+		if !ok {
+			rsc.workflows[*workflowRun.ID] = workflowRun
+		} else {
+			shouldBreak = true
+		}
+	}
+	return shouldBreak
+}
+
+func (rsc *RepositorySyncerCache) GetAllRuns() []*github.WorkflowRun {
+	runs := make([]*github.WorkflowRun, 0, len(rsc.workflows))
+	for _, run := range rsc.workflows {
+		runs = append(runs, run)
+	}
+	return runs
 }
 
 func (rs *RepositorySyncer) Run(ctx context.Context, req RepositorySyncInput) (*RepositorySyncOutput, error) {
@@ -112,7 +145,6 @@ func (rs *RepositorySyncer) sync(
 	}
 	rs.logger.V(1).Info("determined earliest timestamp", "ts", earliestTS)
 
-	allRuns := []*github.WorkflowRun{}
 	page := 1
 	for ; page < maxPages; page++ {
 		opts := github.ListWorkflowRunsOptions{
@@ -128,17 +160,15 @@ func (rs *RepositorySyncer) sync(
 			return nil, nil, errors.Wrap(err, "failed to list workflows in repo")
 		}
 
-		allRuns = append(allRuns, workflowRuns.WorkflowRuns...)
+		cacheHit := rs.cache.SaveInCache(workflowRuns.WorkflowRuns)
 
-		if workflowRuns.WorkflowRuns[len(workflowRuns.WorkflowRuns)-1].CreatedAt.Before(earliestTS) {
+		if workflowRuns.WorkflowRuns[len(workflowRuns.WorkflowRuns)-1].CreatedAt.Before(earliestTS) || cacheHit {
 			break
 		}
 	}
 	rs.logger.V(1).Info("paginated workflow runs collected", "pages", page)
 
-	// rs.logger.Info("pull requests", "prs", prs)
-
-	return prs, allRuns, nil
+	return prs, rs.cache.GetAllRuns(), nil
 }
 
 func createGithubClient(ctx context.Context, secret *v1.Secret) *github.Client {

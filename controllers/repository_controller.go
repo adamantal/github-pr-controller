@@ -33,16 +33,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const (
-	reconcilePeriod = 1 * time.Minute
-)
-
 // RepositoryReconciler reconciles a Repository object
 type RepositoryReconciler struct {
 	client.Client
 	Scheme          *runtime.Scheme
 	reconcilePeriod time.Duration
 	Parameters      RepositoryReconcilerParameters
+	cache           *pkg.RepositorySyncerCache
 }
 
 func NewRepositoryReconciler(
@@ -55,10 +52,13 @@ func NewRepositoryReconciler(
 		return nil, errors.Wrap(err, "failed to parse duration for reconciler")
 	}
 
+	cache := pkg.NewRepositorySyncerCache()
+
 	return &RepositoryReconciler{
 		Client:          client,
 		Scheme:          scheme,
 		reconcilePeriod: reconcilePeriod,
+		cache:           cache,
 	}, nil
 }
 
@@ -99,7 +99,7 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	logger.Info("syncing repository")
-	syncer := pkg.NewRepositorySyncer(logger)
+	syncer := pkg.NewRepositorySyncer(logger, r.cache)
 	repRequest := pkg.RepositorySyncInput{
 		Repository: repository,
 		Secret:     secret,
@@ -114,8 +114,6 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, errors.Wrap(err, "failed to reconcile pull requests")
 	}
 
-	// TODO check all pull requests that have this repository as owner reference
-
 	logger.Info("checking status")
 	newStatus := v1alpha1.RepositoryStatus{
 		Accessed: true,
@@ -127,7 +125,7 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	logger.V(1).Info("reconcile finsihed")
 	return ctrl.Result{
 		Requeue:      true,
-		RequeueAfter: reconcilePeriod,
+		RequeueAfter: r.reconcilePeriod,
 	}, nil
 }
 
@@ -167,7 +165,7 @@ func (r *RepositoryReconciler) reconcilePullRequests(
 	existingPrs := v1alpha1.PullRequestList{}
 	err := r.Client.List(ctx, &existingPrs, client.InNamespace(output.Input.Repository.GetNamespace()))
 	if err != nil {
-		errors.Wrap(err, "failed to list pullrequests")
+		return errors.Wrap(err, "failed to list pullrequests")
 	}
 
 	prsOwnedByRepository := []v1alpha1.PullRequest{}
@@ -186,29 +184,43 @@ func (r *RepositoryReconciler) reconcilePullRequests(
 		pullRequestCrs = append(pullRequestCrs, pkg.PullRequestToCr(pr, output))
 	}
 
-	newPrs, updateablePrs, deleteablePrs := groupPullRequests(output.Input.Repository, prsOwnedByRepository, pullRequestCrs)
+	if err := r.handleThreeWayDiff(ctx, logger, output, prsOwnedByRepository, pullRequestCrs); err != nil {
+		return errors.Wrap(err, "handling three way diff failed")
+	}
+
+	return nil
+}
+
+func (r *RepositoryReconciler) handleThreeWayDiff(
+	ctx context.Context,
+	logger logr.Logger,
+	output *pkg.RepositorySyncOutput,
+	prsOwnedByRepository, pullRequestCrs []v1alpha1.PullRequest,
+) error {
+	newPrs, updateablePrs, deleteablePrs := groupPullRequests(
+		output.Input.Repository, prsOwnedByRepository, pullRequestCrs)
 	logger.Info("3-way diff calculated on resource",
 		"new", len(newPrs),
 		"update", len(updateablePrs),
 		"delete", len(deleteablePrs))
 
-	for _, pullRequest := range newPrs {
-		if err := r.Client.Create(ctx, &pullRequest); err != nil {
+	for i := range newPrs {
+		if err := r.Client.Create(ctx, &newPrs[i]); err != nil {
 			return errors.Wrap(err, "failed to create pullrequest resource")
 		}
 	}
 
-	for _, pullRequest := range updateablePrs {
-		if err := r.Client.Update(ctx, &pullRequest); err != nil {
+	for i := range updateablePrs {
+		if err := r.Client.Update(ctx, &updateablePrs[i]); err != nil {
 			return errors.Wrap(err, "failed to update pullrequest resource")
 		}
-		if err := r.Client.Status().Update(ctx, &pullRequest); err != nil {
+		if err := r.Client.Status().Update(ctx, &updateablePrs[i]); err != nil {
 			return errors.Wrap(err, "failed to update pullrequeststatus resource")
 		}
 	}
 
-	for _, pullRequest := range deleteablePrs {
-		if err := r.Client.Delete(ctx, &pullRequest); err != nil {
+	for i := range deleteablePrs {
+		if err := r.Client.Delete(ctx, &deleteablePrs[i]); err != nil {
 			return errors.Wrap(err, "failed to delete pullrequest resource")
 		}
 	}
@@ -225,7 +237,7 @@ func groupPullRequests(
 	for i, existingPr := range existingPrs {
 		existingPrMap[existingPr.GetName()] = &existingPrs[i]
 	}
-	var new, update, del []v1alpha1.PullRequest
+	var newprs, updateprs, delprs []v1alpha1.PullRequest
 	for _, expectedPr := range expectedPrs {
 		existingPr := existingPrMap[expectedPr.GetName()]
 		if existingPr != nil {
@@ -236,21 +248,21 @@ func groupPullRequests(
 				ensureOwnerRef(repository, updateablePr)
 				updateablePr.Spec = expectedPr.Spec
 				updateablePr.Status = expectedPr.Status
-				update = append(update, *updateablePr)
+				updateprs = append(updateprs, *updateablePr)
 			}
 		} else {
-			new = append(new, expectedPr)
+			newprs = append(newprs, expectedPr)
 		}
 		delete(existingPrMap, expectedPr.GetName())
 	}
 
 	if len(existingPrMap) != 0 {
 		for _, existingPr := range existingPrMap {
-			del = append(del, *existingPr)
+			delprs = append(delprs, *existingPr)
 		}
 	}
 
-	return new, update, del
+	return newprs, updateprs, delprs
 }
 
 func shouldUpdatePullRequest(

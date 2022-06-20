@@ -8,7 +8,6 @@ import (
 	"github.com/google/go-github/v45/github"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,7 +24,7 @@ func PullRequestToCr(
 	workflowRuns := output.WorkflowRuns
 
 	return v1alpha1.PullRequest{
-		ObjectMeta: metav1.ObjectMeta{
+		ObjectMeta: v1.ObjectMeta{
 			Name:      getName(pullRequest),
 			Namespace: namespace,
 			OwnerReferences: []v1.OwnerReference{
