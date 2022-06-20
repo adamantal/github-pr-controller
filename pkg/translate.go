@@ -9,6 +9,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -19,18 +20,27 @@ func PullRequestToCr(
 	pullRequest *github.PullRequest,
 	output *RepositorySyncOutput,
 ) v1alpha1.PullRequest {
-	namespace := output.Input.Repository.GetNamespace()
+	repository := output.Input.Repository
+	namespace := repository.GetNamespace()
 	workflowRuns := output.WorkflowRuns
 
 	return v1alpha1.PullRequest{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      getName(pullRequest),
 			Namespace: namespace,
+			OwnerReferences: []v1.OwnerReference{
+				{
+					APIVersion: repository.APIVersion,
+					Kind:       repository.GetObjectKind().GroupVersionKind().Kind,
+					Name:       repository.GetName(),
+					UID:        repository.GetUID(),
+				},
+			},
 		},
 		Spec: v1alpha1.PullRequestSpec{
 			Repository: v1alpha1.RepositoryDetail{
-				Name:  output.Input.Repository.Spec.Name,
-				Owner: output.Input.Repository.Spec.Owner,
+				Name:  repository.Spec.Name,
+				Owner: repository.Spec.Owner,
 			},
 			BaseRef: *pullRequest.Base.Ref,
 			HeadRef: *pullRequest.Head.Ref,

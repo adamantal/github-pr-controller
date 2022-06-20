@@ -136,6 +136,8 @@ func (rs *RepositorySyncer) sync(
 	}
 	rs.logger.V(1).Info("paginated workflow runs collected", "pages", page)
 
+	// rs.logger.Info("pull requests", "prs", prs)
+
 	return prs, allRuns, nil
 }
 

@@ -25,7 +25,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -111,9 +110,11 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	logger.Info("syncing pull requests")
-	if err := r.reconcilePullRequests(ctx, resp); err != nil {
+	if err := r.reconcilePullRequests(ctx, logger, resp); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to reconcile pull requests")
 	}
+
+	// TODO check all pull requests that have this repository as owner reference
 
 	logger.Info("checking status")
 	newStatus := v1alpha1.RepositoryStatus{
@@ -123,6 +124,7 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, errors.Wrap(err, "failed to update status")
 	}
 
+	logger.V(1).Info("reconcile finsihed")
 	return ctrl.Result{
 		Requeue:      true,
 		RequeueAfter: reconcilePeriod,
@@ -157,9 +159,26 @@ func (r *RepositoryReconciler) updateStatus(
 	return nil
 }
 
-func (r *RepositoryReconciler) reconcilePullRequests(ctx context.Context, output *pkg.RepositorySyncOutput) error {
-	if len(output.PullRequests) == 0 {
-		return nil
+func (r *RepositoryReconciler) reconcilePullRequests(
+	ctx context.Context,
+	logger logr.Logger,
+	output *pkg.RepositorySyncOutput,
+) error {
+	existingPrs := v1alpha1.PullRequestList{}
+	err := r.Client.List(ctx, &existingPrs, client.InNamespace(output.Input.Repository.GetNamespace()))
+	if err != nil {
+		errors.Wrap(err, "failed to list pullrequests")
+	}
+
+	prsOwnedByRepository := []v1alpha1.PullRequest{}
+	for _, existingPr := range existingPrs.Items {
+		ownerRefs := existingPr.GetOwnerReferences()
+		for _, ownerRef := range ownerRefs {
+			if output.Input.Repository.GetObjectKind().GroupVersionKind().Kind == ownerRef.Kind &&
+				output.Input.Repository.GetName() == ownerRef.Name {
+				prsOwnedByRepository = append(prsOwnedByRepository, existingPr)
+			}
+		}
 	}
 
 	pullRequestCrs := make([]v1alpha1.PullRequest, 0, len(output.PullRequests))
@@ -167,61 +186,98 @@ func (r *RepositoryReconciler) reconcilePullRequests(ctx context.Context, output
 		pullRequestCrs = append(pullRequestCrs, pkg.PullRequestToCr(pr, output))
 	}
 
-	for _, pullRequestCr := range pullRequestCrs {
-		if err := r.reconcilePullRequest(ctx, output.Input.Repository, pullRequestCr); err != nil {
-			return errors.Wrap(err, "failed to reconcile pullrequest resource")
+	newPrs, updateablePrs, deleteablePrs := groupPullRequests(output.Input.Repository, prsOwnedByRepository, pullRequestCrs)
+	logger.Info("3-way diff calculated on resource",
+		"new", len(newPrs),
+		"update", len(updateablePrs),
+		"delete", len(deleteablePrs))
+
+	for _, pullRequest := range newPrs {
+		if err := r.Client.Create(ctx, &pullRequest); err != nil {
+			return errors.Wrap(err, "failed to create pullrequest resource")
+		}
+	}
+
+	for _, pullRequest := range updateablePrs {
+		if err := r.Client.Update(ctx, &pullRequest); err != nil {
+			return errors.Wrap(err, "failed to update pullrequest resource")
+		}
+		if err := r.Client.Status().Update(ctx, &pullRequest); err != nil {
+			return errors.Wrap(err, "failed to update pullrequeststatus resource")
+		}
+	}
+
+	for _, pullRequest := range deleteablePrs {
+		if err := r.Client.Delete(ctx, &pullRequest); err != nil {
+			return errors.Wrap(err, "failed to delete pullrequest resource")
 		}
 	}
 
 	return nil
 }
 
-func (r *RepositoryReconciler) reconcilePullRequest(
-	ctx context.Context,
+func groupPullRequests(
 	repository v1alpha1.Repository,
-	pullRequestCr v1alpha1.PullRequest,
-) error {
-	existingCr := v1alpha1.PullRequest{}
-	objKey := client.ObjectKeyFromObject(&pullRequestCr)
-	err := r.Client.Get(ctx, objKey, &existingCr)
-	foundOwnerRef := checkOwnerRef(repository, &existingCr)
-
-	switch {
-	case err == nil:
-		if existingCr.Spec != pullRequestCr.Spec || !foundOwnerRef {
-			existingCr.Spec = pullRequestCr.Spec
-			if err := r.Client.Update(ctx, &existingCr); err != nil {
-				return errors.Wrap(err, "failed to reconcile pullrequest resource")
-			}
-		}
-		if !existingCr.Status.IsEqual(&pullRequestCr.Status) {
-			existingCr.Status = pullRequestCr.Status
-			if err := r.Client.Status().Update(ctx, &existingCr); err != nil {
-				return errors.Wrap(err, "failed to reconcile status subresource of pullrequest")
-			}
-		}
-		return nil
-
-	case apierrors.IsNotFound(err):
-		if err := r.Client.Create(ctx, &pullRequestCr); err != nil {
-			return errors.Wrap(err, "failed to create pullrequest resource")
-		}
-		return nil
-
-	default:
-		return errors.Wrap(err, "failed to check whether pullrequest exists")
+	existingPrs []v1alpha1.PullRequest,
+	expectedPrs []v1alpha1.PullRequest,
+) ([]v1alpha1.PullRequest, []v1alpha1.PullRequest, []v1alpha1.PullRequest) {
+	existingPrMap := make(map[string]*v1alpha1.PullRequest)
+	for i, existingPr := range existingPrs {
+		existingPrMap[existingPr.GetName()] = &existingPrs[i]
 	}
+	var new, update, del []v1alpha1.PullRequest
+	for _, expectedPr := range expectedPrs {
+		existingPr := existingPrMap[expectedPr.GetName()]
+		if existingPr != nil {
+			if shouldUpdatePullRequest(repository, *existingPr, expectedPr) {
+				// keep metadata, update ownerref, spec and status fields
+				updateablePr := existingPr.DeepCopy()
+
+				ensureOwnerRef(repository, updateablePr)
+				updateablePr.Spec = expectedPr.Spec
+				updateablePr.Status = expectedPr.Status
+				update = append(update, *updateablePr)
+			}
+		} else {
+			new = append(new, expectedPr)
+		}
+		delete(existingPrMap, expectedPr.GetName())
+	}
+
+	if len(existingPrMap) != 0 {
+		for _, existingPr := range existingPrMap {
+			del = append(del, *existingPr)
+		}
+	}
+
+	return new, update, del
+}
+
+func shouldUpdatePullRequest(
+	repository v1alpha1.Repository,
+	existingCr v1alpha1.PullRequest,
+	pullRequestCr v1alpha1.PullRequest,
+) bool {
+	return existingCr.Spec != pullRequestCr.Spec ||
+		!checkOwnerRef(repository, &existingCr) ||
+		!existingCr.Status.IsEqual(&pullRequestCr.Status)
 }
 
 func checkOwnerRef(repository v1alpha1.Repository, existingCr *v1alpha1.PullRequest) bool {
 	ownerRefs := existingCr.GetOwnerReferences()
-	foundOwnerRef := false
 	for _, ownerRef := range ownerRefs {
 		if repository.GetObjectKind().GroupVersionKind().Kind == ownerRef.Kind &&
 			repository.GetName() == ownerRef.Name {
-			foundOwnerRef = true
+			return true
 		}
 	}
+	return false
+}
+
+func ensureOwnerRef(repository v1alpha1.Repository, pullRequest *v1alpha1.PullRequest) {
+	ownerRefs := pullRequest.GetOwnerReferences()
+	foundOwnerRef := checkOwnerRef(repository, pullRequest)
+
 	if !foundOwnerRef {
 		ownerRefs = append(ownerRefs, metav1.OwnerReference{
 			APIVersion: repository.APIVersion,
@@ -229,7 +285,6 @@ func checkOwnerRef(repository v1alpha1.Repository, existingCr *v1alpha1.PullRequ
 			Name:       repository.GetName(),
 			UID:        repository.GetUID(),
 		})
-		existingCr.SetOwnerReferences(ownerRefs)
+		pullRequest.SetOwnerReferences(ownerRefs)
 	}
-	return foundOwnerRef
 }
