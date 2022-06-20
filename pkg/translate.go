@@ -73,17 +73,10 @@ func getWorkflowRuns(prID int64, workflowRuns []*github.WorkflowRun) []v1alpha1.
 	for _, workflowRun := range workflowRuns {
 		for _, pr := range workflowRun.PullRequests {
 			if *pr.ID == prID {
-				status := ""
-				if workflowRun.Status != nil {
-					status = *workflowRun.Status
-				}
-				conclusion := ""
-				if workflowRun.Conclusion != nil {
-					status = *workflowRun.Conclusion
-				}
 				statuses = append(statuses, v1alpha1.WorkflowRunStatus{
-					Status:     status,
-					Conclusion: conclusion,
+					Status:     workflowRun.GetStatus(),
+					HeadSHA:    workflowRun.GetHeadSHA(),
+					Conclusion: workflowRun.GetConclusion(),
 				})
 				break
 			}

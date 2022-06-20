@@ -91,10 +91,14 @@ spec:
                     conclusion:
                       description: The conclusion of the run
                       type: string
+                    headSHA:
+                      description: The SHA sum of the HEAD that the workflow refers
+                      type: string
                     status:
                       description: The status of the run
                       type: string
                   required:
+                  - headSHA
                   - status
                   type: object
                 type: array

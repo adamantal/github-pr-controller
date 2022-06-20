@@ -68,6 +68,9 @@ type WorkflowRunStatus struct {
 	// The status of the run
 	Status string `json:"status"`
 
+	// The SHA sum of the HEAD that the workflow refers
+	HeadSHA string `json:"headSHA"` // nolint:tagliatelle
+
 	// The conclusion of the run
 	Conclusion string `json:"conclusion,omitempty"`
 }
