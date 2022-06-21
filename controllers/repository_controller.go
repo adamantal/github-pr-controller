@@ -210,11 +210,13 @@ func (r *RepositoryReconciler) handleThreeWayDiff(
 		}
 	}
 
-	for i := range updateablePrs {
-		if err := r.Client.Update(ctx, &updateablePrs[i]); err != nil {
+	for index := range updateablePrs {
+		prStatus := updateablePrs[index].Status.DeepCopy()
+		if err := r.Client.Update(ctx, &updateablePrs[index]); err != nil {
 			return errors.Wrap(err, "failed to update pullrequest resource")
 		}
-		if err := r.Client.Status().Update(ctx, &updateablePrs[i]); err != nil {
+		updateablePrs[index].Status = *prStatus
+		if err := r.Client.Status().Update(ctx, &updateablePrs[index]); err != nil {
 			return errors.Wrap(err, "failed to update pullrequeststatus resource")
 		}
 	}

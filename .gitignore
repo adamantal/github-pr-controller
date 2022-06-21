@@ -16,3 +16,6 @@
 
 # Binaries
 bin/
+
+# IDE
+.vscode

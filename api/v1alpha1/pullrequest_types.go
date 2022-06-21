@@ -65,6 +65,9 @@ const (
 )
 
 type WorkflowRunStatus struct {
+	// The ID of the workflow run
+	ID int64 `json:"id"`
+
 	// The status of the run
 	Status string `json:"status"`
 

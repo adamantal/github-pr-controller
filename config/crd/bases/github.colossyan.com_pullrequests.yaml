@@ -94,11 +94,16 @@ spec:
                     headSHA:
                       description: The SHA sum of the HEAD that the workflow refers
                       type: string
+                    id:
+                      description: The ID of the workflow run
+                      format: int64
+                      type: integer
                     status:
                       description: The status of the run
                       type: string
                   required:
                   - headSHA
+                  - id
                   - status
                   type: object
                 type: array

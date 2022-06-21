@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/adamantal/github-pr-controller/api/v1alpha1"
@@ -83,6 +84,7 @@ func getWorkflowRuns(prID int64, workflowRuns []*github.WorkflowRun) []v1alpha1.
 		for _, pr := range workflowRun.PullRequests {
 			if *pr.ID == prID {
 				statuses = append(statuses, v1alpha1.WorkflowRunStatus{
+					ID:         workflowRun.GetID(),
 					Status:     workflowRun.GetStatus(),
 					HeadSHA:    workflowRun.GetHeadSHA(),
 					Conclusion: workflowRun.GetConclusion(),
@@ -91,5 +93,12 @@ func getWorkflowRuns(prID int64, workflowRuns []*github.WorkflowRun) []v1alpha1.
 			}
 		}
 	}
+	return orderByID(statuses)
+}
+
+func orderByID(statuses []v1alpha1.WorkflowRunStatus) []v1alpha1.WorkflowRunStatus {
+	sort.Slice(statuses, func(i, j int) bool {
+		return statuses[i].ID < statuses[j].ID
+	})
 	return statuses
 }
