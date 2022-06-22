@@ -60,10 +60,9 @@ func NewRepositorySyncerCache() *RepositorySyncerCache {
 func (rsc *RepositorySyncerCache) SaveInCache(workflowRuns []*github.WorkflowRun) bool {
 	shouldBreak := false
 	for _, workflowRun := range workflowRuns {
-		_, ok := rsc.workflows[*workflowRun.ID]
-		if !ok {
-			rsc.workflows[*workflowRun.ID] = workflowRun
-		} else {
+		_, existed := rsc.workflows[*workflowRun.ID]
+		rsc.workflows[*workflowRun.ID] = workflowRun
+		if existed {
 			shouldBreak = true
 		}
 	}
