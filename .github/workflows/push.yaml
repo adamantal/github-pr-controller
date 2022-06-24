@@ -34,7 +34,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build kafka-operator
+      - name: Build github-pr-controller
         uses: docker/build-push-action@v2
         with:
           tags: ghcr.io/adamantal/github-pr-controller:${{ steps.imagetag.outputs.value }}
