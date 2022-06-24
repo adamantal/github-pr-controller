@@ -62,6 +62,7 @@ func NewRepositoryReconciler(
 		Client:          client,
 		Scheme:          scheme,
 		reconcilePeriod: reconcilePeriod,
+		Parameters:      params,
 		cache:           cache,
 	}, nil
 }
