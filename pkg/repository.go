@@ -10,11 +10,9 @@ import (
 	"github.com/google/go-github/v45/github"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
-	v1 "k8s.io/api/core/v1"
 )
 
 const (
-	tokenName                   = "token"
 	pullRequestWorkflowFileName = "pull-request.yml"
 	maxPages                    = 20 // let's not rate-limit ourselves
 
@@ -35,7 +33,7 @@ type RepositorySyncerCache struct {
 
 type RepositorySyncInput struct {
 	Repository githubv1alpha1.Repository
-	Secret     *v1.Secret
+	Token      string
 }
 
 type RepositorySyncOutput struct {
@@ -100,7 +98,7 @@ func (rs *RepositorySyncer) checkAccess(ctx context.Context, req RepositorySyncI
 		return nil
 	}
 
-	client := rs.getGithubClient(ctx, req.Secret)
+	client := rs.getGithubClient(ctx, req.Token)
 
 	ghRepository, _, err := client.Repositories.Get(ctx, req.Repository.Spec.Owner, req.Repository.Spec.Name)
 	if err != nil {
@@ -112,11 +110,11 @@ func (rs *RepositorySyncer) checkAccess(ctx context.Context, req RepositorySyncI
 	return nil
 }
 
-func (rs *RepositorySyncer) getGithubClient(ctx context.Context, secret *v1.Secret) *github.Client {
+func (rs *RepositorySyncer) getGithubClient(ctx context.Context, token string) *github.Client {
 	if rs.client != nil {
 		return rs.client
 	}
-	rs.client = createGithubClient(ctx, secret)
+	rs.client = createGithubClient(ctx, token)
 	return rs.client
 }
 
@@ -131,7 +129,7 @@ func (rs *RepositorySyncer) sync(
 		return nil, nil, nil
 	}
 
-	client := rs.getGithubClient(ctx, req.Secret)
+	client := rs.getGithubClient(ctx, req.Token)
 	prs, _, err := client.PullRequests.List(ctx, req.Repository.Spec.Owner, req.Repository.Spec.Name, nil)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to list pull requests")
@@ -170,12 +168,11 @@ func (rs *RepositorySyncer) sync(
 	return prs, rs.cache.GetAllRuns(), nil
 }
 
-func createGithubClient(ctx context.Context, secret *v1.Secret) *github.Client {
+func createGithubClient(ctx context.Context, token string) *github.Client {
 	var httpClient *http.Client
-	if secret != nil {
-		bytes := secret.Data[tokenName]
+	if token != "" {
 		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: string(bytes)},
+			&oauth2.Token{AccessToken: token},
 		)
 		httpClient = oauth2.NewClient(ctx, ts)
 	}

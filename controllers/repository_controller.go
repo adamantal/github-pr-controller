@@ -33,6 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const (
+	tokenName = "token"
+)
+
 // RepositoryReconciler reconciles a Repository object
 type RepositoryReconciler struct {
 	client.Client
@@ -58,6 +62,7 @@ func NewRepositoryReconciler(
 		Client:          client,
 		Scheme:          scheme,
 		reconcilePeriod: reconcilePeriod,
+		Parameters:      params,
 		cache:           cache,
 	}, nil
 }
@@ -85,24 +90,25 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	var secret *v1.Secret
+	token := r.Parameters.DefaultToken
 	if repository.Spec.SecretName != "" {
 		secretName := repository.Spec.SecretName
 		logger.Info("obtaining secret", "secretName", secretName)
-		secret = &v1.Secret{}
+		secret := &v1.Secret{}
 		if err := r.Client.Get(ctx, types.NamespacedName{
 			Name:      secretName,
 			Namespace: req.Namespace,
 		}, secret); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "could not find secret for repository")
 		}
+		token = string(secret.Data[tokenName])
 	}
 
 	logger.Info("syncing repository")
 	syncer := pkg.NewRepositorySyncer(logger, r.cache)
 	repRequest := pkg.RepositorySyncInput{
 		Repository: repository,
-		Secret:     secret,
+		Token:      token,
 	}
 	resp, err := syncer.Run(ctx, repRequest)
 	if err != nil {
