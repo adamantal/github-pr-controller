@@ -76,6 +76,10 @@ func main() {
 
 	ctrl.SetLogger(k8s_zap.New(k8s_zap.UseFlagOptions(&opts)))
 
+	if repositoryParams.DefaultToken == "" {
+		repositoryParams.DefaultToken = os.Getenv("DEFAULT_GITHUB_TOKEN")
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
