@@ -63,7 +63,7 @@ func getName(pullRequest *github.PullRequest) string {
 
 func blendString(str string) string {
 	str = strings.ToLower(str)
-	runes := []rune{'\\', '/', '.', '_'}
+	runes := []rune{'\\', '/', '.', '_', '(', ')'}
 	for _, r := range runes {
 		str = strings.ReplaceAll(str, string(r), "-")
 	}
