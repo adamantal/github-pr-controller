@@ -157,6 +157,13 @@ func (rs *RepositorySyncer) sync(
 			return nil, nil, errors.Wrap(err, "failed to list workflows in repo")
 		}
 
+		if workflowRuns.WorkflowRuns == nil {
+			return nil, nil, errors.New("unexpected workflowruns returned from github API")
+		}
+		if len(workflowRuns.WorkflowRuns) == 0 {
+			return nil, nil, errors.New("empty workflowruns returned")
+		}
+
 		cacheHit := rs.cache.SaveInCache(workflowRuns.WorkflowRuns)
 
 		if workflowRuns.WorkflowRuns[len(workflowRuns.WorkflowRuns)-1].CreatedAt.Before(earliestTS) || cacheHit {
