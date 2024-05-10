@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   name: repositories.github.colossyan.com
 spec:
   group: github.colossyan.com
@@ -21,14 +20,19 @@ spec:
         description: Repository is the Schema for the repositories API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -42,8 +46,9 @@ spec:
                 description: The owner of the repository
                 type: string
               secretName:
-                description: The name of the Kubernetes secret containing the OAuth
-                  token required for the controller to access private repositories
+                description: |-
+                  The name of the Kubernetes secret containing the OAuth token required
+                  for the controller to access private repositories
                 type: string
               syncPullRequests:
                 description: Whether the controller should sync all the pull requests
@@ -61,6 +66,12 @@ spec:
                 required:
                 - enabled
                 type: object
+              workflowFileNames:
+                description: The names of the workflow files that should be checked
+                  when the status is updated
+                items:
+                  type: string
+                type: array
             required:
             - name
             - owner
@@ -81,9 +92,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

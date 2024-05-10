@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/adamantal/github-pr-controller/api/v1alpha1"
 	githubv1alpha1 "github.com/adamantal/github-pr-controller/api/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/google/go-github/v45/github"
@@ -13,8 +14,7 @@ import (
 )
 
 const (
-	pullRequestWorkflowFileName = "pull-request.yml"
-	maxPages                    = 20 // let's not rate-limit ourselves
+	maxPages = 20 // let's not rate-limit ourselves
 
 	day               = 24 * time.Hour
 	week              = 7 * day
@@ -23,8 +23,10 @@ const (
 
 type RepositorySyncer struct {
 	logger logr.Logger
-	client *github.Client         // lazy initialized
-	cache  *RepositorySyncerCache // cache
+
+	workflowFileNames []string
+	client            *github.Client         // lazy initialized
+	cache             *RepositorySyncerCache // cache
 }
 
 type RepositorySyncerCache struct {
@@ -42,10 +44,15 @@ type RepositorySyncOutput struct {
 	WorkflowRuns []*github.WorkflowRun
 }
 
-func NewRepositorySyncer(logger logr.Logger, cache *RepositorySyncerCache) RepositorySyncer {
+func NewRepositorySyncer(
+	logger logr.Logger,
+	workflowFileNames []string,
+	cache *RepositorySyncerCache,
+) RepositorySyncer {
 	return RepositorySyncer{
-		logger: logger,
-		cache:  cache,
+		logger:            logger,
+		workflowFileNames: workflowFileNames,
+		cache:             cache,
 	}
 }
 
@@ -142,6 +149,22 @@ func (rs *RepositorySyncer) sync(
 	}
 	rs.logger.V(1).Info("determined earliest timestamp", "ts", earliestTS)
 
+	for _, workflowFileName := range rs.workflowFileNames {
+		if err := rs.extractWorkflowRuns(ctx, client, req.Repository.Spec, workflowFileName, earliestTS); err != nil {
+			return nil, nil, errors.Wrap(err, "failed to extract ")
+		}
+	}
+
+	return prs, rs.cache.GetAllRuns(), nil
+}
+
+func (rs *RepositorySyncer) extractWorkflowRuns(
+	ctx context.Context,
+	client *github.Client,
+	repositorySpec v1alpha1.RepositorySpec,
+	pullRequestWorkflowFileName string,
+	earliestTS time.Time,
+) error {
 	page := 1
 	for ; page < maxPages; page++ {
 		opts := github.ListWorkflowRunsOptions{
@@ -152,16 +175,16 @@ func (rs *RepositorySyncer) sync(
 		}
 
 		workflowRuns, _, err := client.Actions.ListWorkflowRunsByFileName(
-			ctx, req.Repository.Spec.Owner, req.Repository.Spec.Name, pullRequestWorkflowFileName, &opts)
+			ctx, repositorySpec.Owner, repositorySpec.Name, pullRequestWorkflowFileName, &opts)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "failed to list workflows in repo")
+			return errors.Wrap(err, "failed to list workflows in repo")
 		}
 
 		if workflowRuns.WorkflowRuns == nil {
-			return nil, nil, errors.New("unexpected workflowruns returned from github API")
+			return errors.New("unexpected workflowruns returned from github API")
 		}
 		if len(workflowRuns.WorkflowRuns) == 0 {
-			return nil, nil, errors.New("empty workflowruns returned")
+			return errors.New("empty workflowruns returned")
 		}
 
 		cacheHit := rs.cache.SaveInCache(workflowRuns.WorkflowRuns)
@@ -170,9 +193,9 @@ func (rs *RepositorySyncer) sync(
 			break
 		}
 	}
-	rs.logger.V(1).Info("paginated workflow runs collected", "pages", page)
+	rs.logger.V(1).Info("paginated workflow runs collected", "workflowFileName", pullRequestWorkflowFileName, "pages", page)
 
-	return prs, rs.cache.GetAllRuns(), nil
+	return nil
 }
 
 func createGithubClient(ctx context.Context, token string) *github.Client {
