@@ -105,7 +105,7 @@ func (r *RepositoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	logger.Info("syncing repository")
-	syncer := pkg.NewRepositorySyncer(logger, r.cache)
+	syncer := pkg.NewRepositorySyncer(logger, repository.Spec.WorkflowFileNames, r.cache)
 	repRequest := pkg.RepositorySyncInput{
 		Repository: repository,
 		Token:      token,

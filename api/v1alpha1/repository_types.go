@@ -49,6 +49,9 @@ type RepositorySpec struct {
 
 	// Whether the controller should sync all the pull requests belonging to the repository
 	SyncPullRequests SyncPullRequests `json:"syncPullRequests"`
+
+	// The names of the workflow files that should be checked when the status is updated
+	WorkflowFileNames []string `json:"workflowFileNames,omitempty"`
 }
 
 // RepositoryStatus defines the observed state of Repository
