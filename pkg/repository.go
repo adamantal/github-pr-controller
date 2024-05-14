@@ -15,6 +15,7 @@ import (
 
 const (
 	maxPages = 20 // let's not rate-limit ourselves
+	perPage  = 20
 
 	day               = 24 * time.Hour
 	week              = 7 * day
@@ -137,13 +138,28 @@ func (rs *RepositorySyncer) sync(
 	}
 
 	client := rs.getGithubClient(ctx, req.Token)
-	prs, _, err := client.PullRequests.List(ctx, req.Repository.Spec.Owner, req.Repository.Spec.Name, nil)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to list pull requests")
+	page := 1
+	var allPrs []*github.PullRequest
+	for {
+		opts := github.PullRequestListOptions{
+			ListOptions: github.ListOptions{
+				Page:    page,
+				PerPage: perPage,
+			},
+		}
+		prs, resp, err := client.PullRequests.List(ctx, req.Repository.Spec.Owner, req.Repository.Spec.Name, &opts)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "failed to list pull requests")
+		}
+		allPrs = append(allPrs, prs...)
+		if resp.NextPage == 0 || page >= maxPages {
+			break
+		}
+		page += 1
 	}
-	prs = ignorePrsByLabels(prs, req)
+	allPrs = ignorePrsByLabels(allPrs, req)
 
-	earliestTS := getEarliestPullRequestTS(prs)
+	earliestTS := getEarliestPullRequestTS(allPrs)
 	if earliestTS.Before(time.Now().Add(-1 * maxLookBackWindow)) {
 		earliestTS = time.Now().Add(-1 * maxLookBackWindow)
 	}
@@ -155,7 +171,7 @@ func (rs *RepositorySyncer) sync(
 		}
 	}
 
-	return prs, rs.cache.GetAllRuns(), nil
+	return allPrs, rs.cache.GetAllRuns(), nil
 }
 
 func (rs *RepositorySyncer) extractWorkflowRuns(
